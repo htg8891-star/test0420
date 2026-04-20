@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>데카르트의 파리 잡기 Pro - 좌표평면 게임</title>
+    <style>
+        :root {
+            --bg-color: #f4f7f6;
+            --paper-color: #ffffff;
+            --grid-color: #e2e8f0;
+            --axis-color: #2d3748;
+            --primary-color: #3182ce;
+            --accent-color: #e53e3e;
+            --success-color: #38a169;
+            --text-color: #1a202c;
+            --swatter-color: #718096; /* 파리채 색상 */
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        h1 { margin: 0; color: var(--primary-color); font-size: 1.8rem; }
+
+        .stats {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        .stat-item {
+            background: white;
+            padding: 8px 15px;
+            border-radius: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            min-width: 80px;
+        }
+
+        #timer-display.low-time {
+            color: var(--accent-color);
+            animation: blink 0.5s infinite;
+        }
+
+        @keyframes blink { 50% { opacity: 0.5; } }
+
+        #game-container {
+            position: relative;
+            background-color: var(--paper-color);
+            border: 4px solid var(--axis-color);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+            border-radius: 12px;
+            overflow: hidden;
+            /* 파리채가 부드럽게 움직이도록 transition 추가 */
+            cursor: crosshair;
+        }
+
+        canvas { display: block; }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+            background: white;
+            padding: 20px 30px;
+            border-radius: 16px;
+            box-shadow: 0 5px 10px rgba(0,0,0,0.05);
+        }
+
+        .input-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: var(--axis-color);
+        }
+
+        input[type="number"] {
+            width: 65px;
+            padding: 10px;
+            border: 2px solid #cbd5e0;
+            border-radius: 8px;
+            font-size: 1.2rem;
+            text-align: center;
+            background-color: #f8fafc;
+        }
+        
+        input[type="number"]:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            background-color: white;
+        }
+
+        button {
+            padding: 12px 28px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 4px rgba(49, 130, 206, 0.3);
+        }
+
+        button:hover:not(:disabled) { background-color: #2b6cb0; transform: translateY(-1px); }
+        button:active:not(:disabled) { transform: translateY(1px); }
+        button:disabled { background-color: #a0aec0; cursor: not-allowed; box-shadow: none; }
+
+        #message {
+            margin-top: 18px;
+            font-weight: bold;
+            font-size: 1.1rem;
+            height: 26px;
+            text-align: center;
+            transition: color 0.3s;
+        }
+
+        .success { color: var(--success-color); }
+        .fail { color: var(--accent-color); }
+
+        /* 게임 오버 오버레이 */
+        #overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 10;
+            backdrop-filter: blur(4px);
+        }
+
+        #overlay h2 { font-size: 3rem; margin: 0 0 15px 0; color: var(--accent-color); }
+        #overlay p { font-size: 1.5rem; margin: 0 0 25px 0; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>🪰 데카르트의 파리 잡기 Pro</h1>
+    <div class="stats">
+        <div class="stat-item">점수: <span id="score">0</span></div>
+        <div class="stat-item">시간: <span id="timer-display">60</span>s</div>
+        <div class="stat-item">콤보: <span id="combo">0</span></div>
+    </div>
+</header>
+
+<div id="game-container">
+    <canvas id="gridCanvas"></canvas>
+    <div id="overlay">
+        <h2>GAME OVER</h2>
+        <p id="final-score">최종 점수: 0</p>
+        <button onclick="startGame()">다시 도전하기</button>
+    </div>
+</div>
+
+<div class="controls">
+    <div class="input-group">
+        ( <input type="number" id="inputX" min="-10" max="10" placeholder="x" required> ,
+        <input type="number" id="inputY" min="-10" max="10" placeholder="y" required> )
+    </div>
+    <button id="catchBtn" onclick="prepareCatch()">파리 잡기!</button>
+</div>
+
+<div id="message">제한 시간 내에 좌표를 입력해 파리를 잡으세요!</div>
+
+<script>
+    const canvas = document.getElementById('gridCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const comboEl = document.getElementById('combo');
+    const timerEl = document.getElementById('timer-display');
+    const messageEl = document.getElementById('message');
+    const inputX = document.getElementById('inputX');
+    const inputY = document.getElementById('inputY');
+    const overlay = document.getElementById('overlay');
+    const catchBtn = document.getElementById('catchBtn');
+
+    // 게임 설정
+    const range = 10;
+    const GAME_TIME = 60;
+    
+    // 게임 변수
+    let step, flyPos, score, combo, timeLeft, gameTimer;
+    let particles = [];
+    let isGameActive = false;
+
+    // 파리채 애니메이션 변수
+    let swatter = {
+        targetX: 0, targetY: 0, // 입력한 좌표의 캔버스 위치
+        currentY: -100, // 애니메이션 시작 높이
+        opacity: 0,
+        isAnimating: false,
+        phase: 'none' // 'hide', 'down', 'hit', 'up'
+    };
+
+    function init() {
+        // 반응형 정사각형 크기 설정
+        const displaySize = Math.min(window.innerWidth - 50, 550);
+        canvas.width = displaySize;
+        canvas.height = displaySize;
+        step = canvas.width / (range * 2 + 2); // 축 여백 포함
+        
+        // 렌더링 루프 시작 (게임 시작 전에도 모눈은 그려야 함)
+        requestAnimationFrame(renderLoop);
+        startGame();
+    }
+
+    function startGame() {
+        score = 0;
+        combo = 0;
+        timeLeft = GAME_TIME;
+        isGameActive = true;
+        particles = [];
+        resetSwatter();
+        
+        scoreEl.innerText = score;
+        comboEl.innerText = combo;
+        timerEl.innerText = timeLeft;
+        timerEl.classList.remove('low-time');
+        overlay.style.display = 'none';
+        catchBtn.disabled = false;
+        showMessage("게임 시작! 첫 번째 파리를 잡으세요.", "text");
+        
+        newFly();
+        startTimer();
+    }
+
+    function startTimer() {
+        clearInterval(gameTimer);
+        gameTimer = setInterval(() => {
+            if (!isGameActive) return;
+            timeLeft--;
+            timerEl.innerText = timeLeft;
+            if (timeLeft <= 10) timerEl.classList.add('low-time');
+            if (timeLeft <= 0) endGame();
+        }, 1000);
+    }
+
+    function endGame() {
+        isGameActive = false;
+        clearInterval(gameTimer);
+        catchBtn.disabled = true;
+        document.getElementById('final-score').innerText = `최종 점수: ${score}점 (최대 콤보: ${combo})`;
+        overlay.style.display = 'flex';
+    }
+
+    function newFly() {
+        // -range ~ range 사이의 정수 좌표
+        flyPos = {
+            x: Math.floor(Math.random() * (range * 2 + 1)) - range,
+            y: Math.floor(Math.random() * (range * 2 + 1)) - range
+        };
+        // 원점 방지
+        if(flyPos.x === 0 && flyPos.y === 0) newFly();
+    }
+
+    // 좌표 변환 유틸리티
+    function toCanvasX(mathX) { return canvas.width / 2 + (mathX * step); }
+    function toCanvasY(mathY) { return canvas.height / 2 - (mathY * step); }
+
+    // 메인 렌더링 루프
+    function renderLoop() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        drawGrid();
+        
+        // 게임 진행 중에만 파리 표시
+        if (isGameActive && flyPos) {
+            drawFly(flyPos.x, flyPos.y);
+        }
+
+        updateAndDrawParticles();
+        drawSwatter(); // 파리채는 항상 위에
+
+        requestAnimationFrame(renderLoop);
+    }
+
+    // 모눈종이 및 축 그리기
+    function drawGrid() {
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const fontSize = canvas.width / 38;
+
+        // 1. 연한 격자
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 1;
+        for (let i = -range; i <= range; i++) {
+            // 세로선
+            ctx.beginPath();
+            ctx.moveTo(toCanvasX(i), 0);
+            ctx.lineTo(toCanvasX(i), canvas.height);
+            ctx.stroke();
+            // 가로선
+            ctx.beginPath();
+            ctx.moveTo(0, toCanvasY(i));
+            ctx.lineTo(canvas.width, toCanvasY(i));
+            ctx.stroke();
+        }
+
+        // 2. 굵은 축
+        ctx.strokeStyle = '#2d3748';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(0, centerY); ctx.lineTo(canvas.width, centerY); // x축
+        ctx.moveTo(centerX, 0); ctx.lineTo(centerX, canvas.height); // y축
+        ctx.stroke();
+
+        // 3. 눈금 숫자
+        ctx.fillStyle = '#1a202c';
+        ctx.font = `bold ${fontSize}px Pretendard`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+
+        const labels = [-10, -5, 5, 10];
+        labels.forEach(num => {
+            // x축 숫자 (y=0 아래에)
+            ctx.fillText(num, toCanvasX(num), centerY + 8);
+            // y축 숫자 (x=0 왼쪽에)
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(num, centerX - 10, toCanvasY(num));
+            ctx.textAlign = 'center'; // 원복
+        });
+        
+        // 원점 O
+        ctx.fillText('O', centerX - 15, centerY + 8);
+    }
+
+    // 파리 그리기 (🪰 이모지)
+    function drawFly(x, y) {
+        ctx.font = `${step * 0.9}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🪰', toCanvasX(x), toCanvasY(y));
+    }
+
+    // Canvas API로 파리채 직접 그리기
+    function drawSwatterShape(x, y, opacity) {
+        ctx.save();
+        ctx.globalAlpha = opacity;
+        ctx.translate(x, y);
+        // 약간 회전시켜 타격감 생성 (내려칠 때만 0도)
+        if (swatter.phase !== 'hit') ctx.rotate(-Math.PI / 8); 
+
+        const headW = step * 1.5;
+        const headH = step * 2;
+        const handleW = step * 0.2;
+        const handleH = step * 3;
+
+        ctx.fillStyle = '#718096'; // handle color
+        ctx.strokeStyle = '#4a5568'; // grid color
+        ctx.lineWidth = 1;
+
+        // 1. 손잡이
+        ctx.fillRect(-handleW/2, headH/2, handleW, handleH);
+
+        // 2. 파리채 머리 (격자 무늬 사각형)
+        ctx.fillStyle = 'rgba(113, 128, 150, 0.3)'; // 반투명 머리
+        ctx.fillRect(-headW/2, -headH/2, headW, headH);
+        ctx.strokeRect(-headW/2, -headH/2, headW, headH);
+
+        // 머리 내부 격자
+        ctx.beginPath();
+        for(let gx = -headW/2 + 5; gx < headW/2; gx += 5) {
+            ctx.moveTo(gx, -headH/2); ctx.lineTo(gx, headH/2);
+        }
+        for(let gy = -headH/2 + 5; gy < headH/2; gy += 5) {
+            ctx.moveTo(-headW/2, gy); ctx.lineTo(headW/2, gy);
+        }
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
+    // 파리채 애니메이션 로직
+    function drawSwatter() {
+        if (!swatter.isAnimating) return;
+
+        drawSwatterShape(swatter.targetX, swatter.currentY, swatter.opacity);
+
+        const downSpeed = canvas.height / 15; // 내려오는 속도
+        const upSpeed = canvas.height / 25; // 올라가는 속도
+
+        switch (swatter.phase) {
+            case 'down':
+                swatter.opacity = Math.min(swatter.opacity + 0.1, 1);
+                swatter.currentY += downSpeed;
+                // 목표 지점 도달 시 타격
+                if (swatter.currentY >= swatter.targetY) {
+                    swatter.currentY = swatter.targetY;
+                    swatter.phase = 'hit';
+                    setTimeout(() => swatter.phase = 'up', 150); // 타격 후 잠시 멈춤
+                    checkCatchResult(); // 타격 시점에 결과 판정
+                }
+                break;
+            case 'up':
+                swatter.currentY -= upSpeed;
+                swatter.opacity -= 0.05;
+                if (swatter.opacity <= 0) {
+                    resetSwatter();
+                }
+                break;
+        }
+    }
+
+    function resetSwatter() {
+        swatter.isAnimating = false;
+        swatter.phase = 'none';
+        swatter.opacity = 0;
+        swatter.currentY = -200; // 화면 위로 초기화
+        if(isGameActive) catchBtn.disabled = false;
+    }
+
+    // 1단계: 입력 확인 및 파리채 준비
+    function prepareCatch() {
+        if (!isGameActive || swatter.isAnimating) return;
+
+        const userX = parseInt(inputX.value);
+        const userY = parseInt(inputY.value);
+
+        // 입력 유효성 검사
+        if (isNaN(userX) || isNaN(userY)) {
+            showMessage("x좌표와 y좌표를 모두 입력하세요!", "fail");
+            return;
+        }
+        if (userX < -range || userX > range || userY < -range || userY > range) {
+            showMessage(`좌표 범위는 -${range} ~ ${range} 사이입니다.`, "fail");
+            return;
+        }
+
+        // 버튼 비활성화 (연타 방지)
+        catchBtn.disabled = true;
+
+        // 파리채 목표 설정 및 애니메이션 시작
+        swatter.targetX = toCanvasX(userX);
+        swatter.targetY = toCanvasY(userY);
+        swatter.currentY = swatter.targetY - canvas.height / 2; // 목표 위에서 시작
+        swatter.opacity = 0;
+        swatter.isAnimating = true;
+        swatter.phase = 'down';
+        showMessage("내려치기!!", "text");
+    }
+
+    // 2단계: 타격 시점에서 결과 확인 (drawSwatter에서 호출)
+    function checkCatchResult() {
+        const userX = parseInt(inputX.value);
+        const userY = parseInt(inputY.value);
+
+        if (userX === flyPos.x && userY === flyPos.y) {
+            // --- 성공 ---
+            const bonus = combo * 2;
+            score += 10 + bonus;
+            combo++;
+            timeLeft = Math.min(timeLeft + 3, GAME_TIME); // 시간 보너스 (+3초)
+            
+            createParticles(toCanvasX(flyPos.x), toCanvasY(flyPos.y), '#38a169'); // 초록색 폭죽
+            showMessage(`✨ 성공! (${userX}, ${userY}) 파리를 잡았습니다! (+3초)`, "success");
+            
+            scoreEl.innerText = score;
+            comboEl.innerText = combo;
+            
+            // 타격 애니메이션 후 새로운 파리 (시간차)
+            setTimeout(() => {
+                if(!isGameActive) return;
+                newFly();
+                inputX.value = ''; inputY.value = '';
+                inputX.focus();
+                showMessage("새로운 파리가 나타났습니다!", "text");
+            }, 800);
+        } else {
+            // --- 실패 ---
+            combo = 0;
+            comboEl.innerText = combo;
+            
+            // 타격 위치에 '❌' 표시 입자 생성
+            createParticles(toCanvasX(userX), toCanvasY(userY), '#e53e3e', true); 
+            showMessage(`❌ 놓쳤습니다! 입력한 곳은 (${userX}, ${userY}) 입니다.`, "fail");
+            
+            // 캔버스 흔들기 효과
+            canvas.parentElement.style.animation = "shake 0.4s";
+            setTimeout(() => canvas.parentElement.style.animation = "", 400);
+        }
+    }
+
+    // 시각 효과 (폭죽/❌ 표시)
+    function createParticles(x, y, color, isFail = false) {
+        const count = isFail ? 1 : 20;
+        for (let i = 0; i < count; i++) {
+            particles.push({
+                x, y,
+                vx: isFail ? 0 : (Math.random() - 0.5) * 10,
+                vy: isFail ? -2 : (Math.random() - 0.5) * 10, // 실패는 위로 살짝
+                life: 1.0,
+                color,
+                text: isFail ? '❌' : null,
+                size: isFail ? step : Math.random() * 4 + 2
+            });
+        }
+    }
+
+    function updateAndDrawParticles() {
+        particles.forEach((p, i) => {
+            p.x += p.vx; p.y += p.vy;
+            if(!p.text) p.vy += 0.1; // 일반 폭죽은 중력 적용
+            p.life -= p.text ? 0.02 : 0.03;
+            
+            if (p.life > 0) {
+                ctx.save();
+                ctx.globalAlpha = p.life;
+                if (p.text) {
+                    ctx.font = `${p.size}px Arial`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillStyle = p.color;
+                    ctx.fillText(p.text, p.x, p.y);
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+                    ctx.fillStyle = p.color;
+                    ctx.fill();
+                }
+                ctx.restore();
+            } else particles.splice(i, 1);
+        });
+    }
+
+    function showMessage(txt, type) {
+        messageEl.innerText = txt;
+        messageEl.className = type; // success, fail, text
+    }
+
+    // 엔터키 지원
+    window.addEventListener('keydown', (e) => {
+        if(e.key === 'Enter' && !catchBtn.disabled) prepareCatch();
+    });
+    
+    // 화면 크기 변경 시 대응
+    window.addEventListener('resize', () => {
+        if(isGameActive) endGame(); // 크기 바뀌면 게임 초기화가 안전
+        const displaySize = Math.min(window.innerWidth - 50, 550);
+        canvas.width = displaySize; canvas.height = displaySize;
+        step = canvas.width / (range * 2 + 2);
+    });
+
+    init();
+</script>
+
+<style>
+    /* 캔버스 흔들기 애니메이션 */
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        10%, 30%, 50%, 70%, 90% { transform: translateX(-6px); }
+        20%, 40%, 60%, 80% { transform: translateX(6px); }
+    }
+</style>
+</body>
+</html>
